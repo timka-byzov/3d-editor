@@ -54,10 +54,10 @@ class Camera:
                 self.prev_x, self.prev_y = pg.mouse.get_pos()
             else:
                 x, y = pg.mouse.get_pos()
-                kx = (x - self.prev_x) / 35
-                ky = (y - self.prev_y) / 35
+                kx = -(x - self.prev_x) / 35
+                ky = -(y - self.prev_y) / 35
                 self.camera_yaw(self.rotation_speed * kx)
-                self.camera_pitch(self.rotation_speed * ky)
+                #self.camera_pitch(self.rotation_speed * ky)
 
                 self.prev_x, self.prev_y = x, y
 

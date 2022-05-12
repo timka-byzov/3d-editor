@@ -24,78 +24,93 @@ class Object3D:
         self.movement_flag, self.draw_vertexes = True, False
         self.label = ''
 
-    # @classmethod
-    # def draw_objects(cls, objects: list):
-    #
-    #
-    #     for object in objects:
-    #         vertexes, colors = object.screen_projection()
+    @classmethod
+    def draw_objects(cls, render, objects: list):
 
-    def draw(self):
-        self.screen_projection()
-        self.movement()
+        vertexes = []
+        objects_colors_faces = []
+
+        for i, object in enumerate(objects):
+            object.movement()
+
+            shaded_colors = [(object.calculate_shade(face_color[1], face_color[0]), face_color[1]) for face_color in
+                             object.color_faces]
+
+            obj_verts = object.vertexes @ render.camera.camera_matrix()  # переводим в пространство камеры
+            vertexes.append(obj_verts)
+            objects_colors_faces += [(i, shaded_color) for shaded_color in shaded_colors]
+
+        def sort_by_distance(color_faces):
+            object_num, color_face = color_faces
+            face = color_face[1]
+
+            xsum = ysum = zsum = 0.0
+            n = len(vertexes[object_num][face])
+
+            for vert in vertexes[object_num][face]:
+                xsum += vert[0]
+                ysum += vert[1]
+                zsum += vert[2]
+
+            av_x, av_y, av_z = xsum / n, ysum / n, zsum / n
+
+            return av_x * av_x + av_y * av_y + av_z * av_z
+
+        objects_colors_faces.sort(key=sort_by_distance, reverse=True)
+
+        for vert_set_num in range(len(vertexes)):
+            temp_verts = vertexes[vert_set_num]
+            temp_verts = temp_verts @ render.projection.projection_matrix
+            temp_verts /= temp_verts[:, -1].reshape(-1, 1)
+            temp_verts[(temp_verts > 2) | (temp_verts < -2)] = 0
+            temp_verts = temp_verts @ render.projection.to_screen_matrix
+            temp_verts = temp_verts[:, :2]
+            vertexes[vert_set_num] = temp_verts
+
+        for index, color_face in enumerate(objects_colors_faces):
+            object_num, tup = color_face
+            color, face = tup
+
+            polygon = vertexes[object_num][face]
+            if not any_func(polygon, render.H_WIDTH, render.H_HEIGHT):
+                pg.draw.polygon(render.screen, color, polygon)
+                # pg.draw.polygon(self.render.screen, (255, 255, 255), polygon, 1)
+                # if self.label:
+                #     text = self.font.render(self.label[index], True, pg.Color('white'))
+                #     self.render.screen.blit(text, polygon[-1])
+
+    # def draw(self):
+    #     self.screen_projection()
+    #     self.movement()
 
     def movement(self):
         if self.movement_flag:
             self.rotate_y(-(pg.time.get_ticks() % 0.005))
         pass
 
-    def screen_projection(self):
+    # def screen_projection(self):
 
-        shaded_colors = [(self.calculate_shade(face_color[1], face_color[0]), face_color[1]) for face_color in
-                         self.color_faces]
+    # vertexes = vertexes @ self.render.projection.projection_matrix  # переводим в пространство плоскости отсечения
+    # vertexes /= vertexes[:, -1].reshape(-1, 1)
+    # vertexes[(vertexes > 2) | (vertexes < -2)] = 0
+    # vertexes = vertexes @ self.render.projection.to_screen_matrix
+    # vertexes = vertexes[:, :2]  # отсекаем лишку, чтоб за пределами камеры ничего не рисовалось
 
-        vertexes = self.vertexes @ self.render.camera.camera_matrix()  # переводим в пространство камеры
+    # if self.draw_vertexes:
+    #     for vertex in vertexes:
+    #         if not any_func(vertex, self.render.H_WIDTH, self.render.H_HEIGHT):
+    #             pg.draw.circle(self.render.screen, pg.Color('white'), vertex, 2)
 
-        def sort_by_distance(val):
-            face = val[1]
-            xsum = ysum = zsum = 0.0
-            n = len(vertexes[face])
-
-            for vert in vertexes[face]:
-                xsum += vert[0]
-                ysum += vert[1]
-                zsum += vert[2]
-
-            av_x, av_y, av_z = xsum / n, ysum / n, zsum / n
-            return av_x * av_x + av_y * av_y + av_z * av_z
-
-        self.color_faces.sort(key=sort_by_distance, reverse=True)
-
-        vertexes = vertexes @ self.render.projection.projection_matrix  # переводим в пространство плоскости отсечения
-
-        vertexes /= vertexes[:, -1].reshape(-1, 1)
-        vertexes[(vertexes > 2) | (vertexes < -2)] = 0
-
-        vertexes = vertexes @ self.render.projection.to_screen_matrix
-
-        # def f(val):
-        #     face = val[1]
-        #     zsum = 0.0
-        #
-        #     for vert in self.vertexes[face]:
-        #         zsum += vert[2]
-        #
-        #     return zsum / len(self.vertexes[face])
-        #
-        # self.color_faces.sort(key=f, reverse=True)
-        vertexes = vertexes[:, :2]
-
-        # if self.draw_vertexes:
-        #     for vertex in vertexes:
-        #         if not any_func(vertex, self.render.H_WIDTH, self.render.H_HEIGHT):
-        #             pg.draw.circle(self.render.screen, pg.Color('white'), vertex, 2)
-
-        # return vertexes, shaded_colors
-        for index, color_face in enumerate(shaded_colors):
-            color, face = color_face
-            polygon = vertexes[face]
-            if not any_func(polygon, self.render.H_WIDTH, self.render.H_HEIGHT):
-                pg.draw.polygon(self.render.screen, color, polygon)
-                # pg.draw.polygon(self.render.screen, (255, 255, 255), polygon, 1)
-                if self.label:
-                    text = self.font.render(self.label[index], True, pg.Color('white'))
-                    self.render.screen.blit(text, polygon[-1])
+    # for index, color_face in enumerate(shaded_colors):
+    #     color, face = color_face
+    #     polygon = vertexes[face]
+    #     if not any_func(polygon, self.render.H_WIDTH, self.render.H_HEIGHT):
+    #         pg.draw.polygon(self.render.screen, color, polygon)
+    #         # pg.draw.polygon(self.render.screen, (255, 255, 255), polygon, 1)
+    #         if self.label:
+    #             text = self.font.render(self.label[index], True, pg.Color('white'))
+    #             self.render.screen.blit(text, polygon[-1])
+    # return vertexes, shaded_colors
 
     def calculate_shade(self, face, color):
         if not self.shading:
