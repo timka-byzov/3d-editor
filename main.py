@@ -21,8 +21,8 @@ class SoftwareRender:
     def create_objects(self):
         self.camera = Camera(self, [0, 3, -30], True)
         self.projection = Projection(self)
-        #self.objects = [Cube(self, shading=True)]  # , Axes(self, shading=False)]  # self.get_object_from_file('resources/t_34_obj.obj')
-        self.objects = [Tetrahedron(self, shading=True), Cube(self, shading=True)]
+        # self.objects = [Cube(self, shading=True)]  # , Axes(self, shading=False)]  # self.get_object_from_file('resources/t_34_obj.obj')
+        self.objects = [Tetrahedron(self, shading=True)]#, Cube(self, shading=True)]
 
         # self.object.rotate_y(-math.pi / 4)
         # self.axes = Axes(self)
