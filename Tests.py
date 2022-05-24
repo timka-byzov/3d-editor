@@ -1,6 +1,6 @@
 import math
 import unittest
-
+from vector import *
 import numpy as np
 
 from main import SoftwareRender
@@ -30,17 +30,32 @@ class Tests(unittest.TestCase):
 
         projection_vertexes = self.project(render, self.vertexes)
 
-        projected_point = self.project(render, np.array([[0.95, 0.95, 0, 1]]))
+        projected_point = self.project(render, np.array([[0, 0, -1, 1]]))
 
-        self.assertEqual(Object3D.check_point_in_face_on_plane(projected_point[0],
+        self.assertEqual(Object3D.check_point_in_face_on_plane(Vector2(*projected_point[0]),
                                                                [projection_vertexes[vert_num] for vert_num in
                                                                 self.faces[0]]), True)
+
+    def test_edges_intersetion(self):
+        render = SoftwareRender()
+        self.vertexes1 = np.array([[-1, -1, -1, 1], [-1, 1, -1, 1], [1, 1, -1, 1], [1, -1, -1, 1]])
+        self.vertexes2 = np.array([[-1, -1, -1, 1], [-1, 1, -1, 1], [1, 1, -1, 1], [1, -1, -1, 1]])
+        for i in range(4):
+            self.vertexes2[i] += [3, 2, 0, 0]
+
+        # self.faces1 = np.array([[0, 1, 2, 3]])
+        # self.faces2 = np.array([[0, 1, 2, 3]])
+
+        projection_vertexes1 = self.project(render, self.vertexes1)
+        projection_vertexes2 = self.project(render, self.vertexes2)
+
+        self.assertEqual(Object3D.check_edges_intersection(projection_vertexes1, projection_vertexes2), True)
 
     def test_two_faces_on_plane(self):
         vertexes1 = np.array([[0, 0], [0, 1], [1, 1], [1, 0]])
         vertexes2 = np.array([[0, 0], [5, 6], [6, 6], [6, 5]])
 
-        self.assertEqual(Object3D.find_point_inside(vertexes1, vertexes2), True)
+        self.assertEqual(Object3D.check_edges_intersection(vertexes1, vertexes2), True)
 
     def test_get_face_equation(self):
         vertexes = np.array([[5, 5, 67], [5, 6, 45], [6, 6, 12]])

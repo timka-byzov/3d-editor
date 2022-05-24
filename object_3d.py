@@ -2,9 +2,10 @@ import pygame as pg
 from matrix_functions import *
 from numba import njit
 from vector import *
+import numpy as np
 
 dim = 0.01
-EPS = 1e-3
+EPS = 1e-4
 
 
 @njit(fastmath=True)
@@ -22,41 +23,69 @@ class Object3D:
 
         self.font = pg.font.SysFont('Arial', 30, bold=True)
         self.color_faces = [(pg.Color('orange'), face) for face in self.faces]
-        self.movement_flag, self.draw_vertexes = True, False
+        self.movement_flag, self.draw_vertexes = False, False
         self.label = ''
 
     @classmethod
-    def check_point_in_face_on_plane(cls, point_coords: Vector2, face_coords):  # (edges(x, y))
-        middle_of_edge = (Vector2(*face_coords[0]) + Vector2(*face_coords[1])) * 0.5
+    def check_point_in_face_on_plane(cls, point: Vector2, face_coords):  # (edges(x, y))
+        middle_of_edge = Vector2(*face_coords[0]) + (Vector2(*face_coords[1]) - Vector2(*face_coords[0])) * 0.5
 
-        point = Vector2(*point_coords)
+        # point = Vector2(*point_coords)
         vec = middle_of_edge - point
 
         intersections_count = 0
-        for i in range(len(face_coords) - 1):
+        for i in range(len(face_coords)):
             p1 = Vector2(*face_coords[i])
-            p2 = Vector2(*face_coords[i + 1])
+            p2 = Vector2(*face_coords[(i + 1) % len(face_coords)])
 
             edge_vec = p2 - p1
 
             a = np.array([[vec.x, -edge_vec.x], [vec.y, -edge_vec.y]])
             b = np.array([p1.x - point.x, p1.y - point.y])
-            res = np.linalg.solve(a, b)
-            t, q = res[0], res[1]
 
-            if t > 0 and 0 < q < 1:
-                intersections_count += 1
+            try:
+                t, q = np.linalg.solve(a, b)
+                if t > -EPS and -EPS < q < 1 + EPS:
+                    intersections_count += 1
+            except:
+                continue
+
         return intersections_count % 2 == 1
 
+    @classmethod
+    def check_points_intersection(cls, vertexes1, vertexes2):
+        for i in range(len(vertexes1)):
+            point = Vector2(*vertexes1[i])
+            if cls.check_point_in_face_on_plane(point, vertexes2):
+                return True
+
+        for j in range(len(vertexes2)):
+            point = Vector2(*vertexes2[j])
+            if cls.check_point_in_face_on_plane(point, vertexes1):
+                return True
+
+        return False
 
     @classmethod
-    def check_two_edges_intersection(cls, vertexes1, vertexes2):
+    def check_edges_intersection(cls, vertexes1, vertexes2):
         for i in range(len(vertexes1)):
-            vec1 = Vector2(*vertexes1[(i + 1) % len(vertexes1)]) - Vector2(vertexes1[i])
+            point1 = Vector2(*vertexes1[i])
+            vec1 = Vector2(*vertexes1[(i + 1) % len(vertexes1)]) - Vector2(*vertexes1[i])
             for j in range(len(vertexes2)):
-                vec2 = Vector2(*vertexes2[])
+                point2 = Vector2(*vertexes2[j])
+                vec2 = Vector2(*vertexes2[(j + 1) % (len(vertexes2))]) - Vector2(*vertexes2[j])
 
+                a = np.array([[vec1.x, -vec2.x], [vec1.y, -vec2.y]])
+                b = np.array([point2.x - point1.x, point2.y - point1.y])
 
+                try:
+                    t, q = np.linalg.solve(a, b)
+
+                    if -EPS < t < 1 + EPS and -EPS < q < 1 + EPS:
+                        return True
+                except:
+                    continue
+        return False
 
     @classmethod
     def draw_objects(cls, render, objects: list):
@@ -74,47 +103,33 @@ class Object3D:
             vertexes.append(obj_verts)
             objects_colors_faces += [(i, shaded_color) for shaded_color in shaded_colors]
 
-        # def sort_by_distance(color_faces):
-        #     object_num, color_face = color_faces
-        #     face = color_face[1]
-        #
-        #     xsum = ysum = zsum = 0.0
-        #     n = len(vertexes[object_num][face])
-        #
-        #     for vert in vertexes[object_num][face]:
-        #         xsum += vert[0]
-        #         ysum += vert[1]
-        #         zsum += vert[2]
-        #
-        #     av_x, av_y, av_z = xsum / n, ysum / n, zsum / n
-        #
-        #     return av_x * av_x + av_y * av_y + av_z * av_z
-        #
-        # objects_colors_faces.sort(key=sort_by_distance, reverse=True)
-
-        for i in range(len(objects_colors_faces) - 1):
-
-            for j in range(i + 1, len(objects_colors_faces)):
+        for k in range(len(objects_colors_faces) - 1):
+            for i in range(k, len(objects_colors_faces)):
 
                 object1, tup1 = objects_colors_faces[i]
                 color1, vertexes_set1 = tup1
-                vertexes1 = [vertexes[object1][i] for i in vertexes_set1]
+                vertexes1 = [vertexes[object1][_] for _ in vertexes_set1]
 
-                object2, tup2 = objects_colors_faces[j]
-                color2, vertexes_set2 = tup2
-                vertexes2 = [vertexes[object2][i] for i in vertexes_set2]
+                for j in range(k, len(objects_colors_faces)):
+                    if i == j:
+                        continue
 
-                t1 = not cls.check_face_camera_same_side_in_camera_space(vertexes1, vertexes2)
-                t2 = cls.check_face_camera_same_side_in_camera_space(vertexes2, vertexes1)
-                t3 = cls.check_intersection(cls.project_on_plain(render, vertexes1),
-                                            cls.project_on_plain(render, vertexes2))
-                # t4 = cls.find_point_inside(cls.project_on_plain(render, vertexes2),
-                #                            cls.project_on_plain(render, vertexes1))
+                    object2, tup2 = objects_colors_faces[j]
+                    color2, vertexes_set2 = tup2
+                    vertexes2 = [vertexes[object2][_] for _ in vertexes_set2]
 
-                if t1 and t2:
-                    objects_colors_faces[i], objects_colors_faces[j] = objects_colors_faces[j], objects_colors_faces[i]
+                    t1 = cls.check_face_camera_same_side_in_camera_space(vertexes1, vertexes2)
+                    t2 = not cls.check_face_camera_same_side_in_camera_space(vertexes2, vertexes1)
+                    t3 = cls.check_intersection(cls.project_on_plain(render, vertexes1),
+                                                cls.project_on_plain(render, vertexes2))
 
-        objects_colors_faces.reverse()
+                    if t3 and t2 and t1:
+                        break
+
+                else:
+                    objects_colors_faces[k], objects_colors_faces[i] = objects_colors_faces[i], \
+                                                                       objects_colors_faces[k]
+                    break
 
         for vert_set_num in range(len(vertexes)):
             temp_verts = vertexes[vert_set_num]
@@ -188,41 +203,42 @@ class Object3D:
             else:
                 plus_count += 1
 
-        return (minus_count and camera_side < 0) or (plus_count and camera_side > 0)
+        return (plus_count == 0 and camera_side <= 0) or (minus_count == 0 and camera_side >= 0)
 
     @classmethod
     def check_intersection(cls, vertexes1, vertexes2):
-        for j in range(len(vertexes2)):
-            cls.find_point_inside(vertexes1, Vector2(*vertexes2[j]))
+        t1 = cls.check_edges_intersection(vertexes1, vertexes2)
+        t2 = cls.check_points_intersection(vertexes1, vertexes2)
+        return t1 or t2
 
-    @classmethod
-    def find_point_inside(cls, vertexes, point: Vector2):
-        def equation(p1: Vector2, p2: Vector2, point: Vector2):
-            return (point.x - p1.x) * (p2.y - p1.y) - (point.y - p1.y) * (p2.x - p1.x)
-
-        minus_count = 0
-        plus_count = 0
-        nul_count = 0
-
-        for i in range(len(vertexes)):
-            p1 = Vector2(*vertexes[i])
-            p2 = Vector2(*vertexes[(i + 1) % len(vertexes)])
-
-            res = equation(p1, p2, point)
-            if abs(res) < EPS:
-                nul_count += 1
-                continue
-
-            if res > 0:
-                plus_count += 1
-            else:
-                minus_count += 1
-
-            # if plus_count + nul_count == len(vertexes2) or \
-            #         minus_count + nul_count == len(vertexes2):
-            #     return False
-
-        return True
+    # @classmethod
+    # def find_point_inside(cls, vertexes, point: Vector2):
+    #     def equation(p1: Vector2, p2: Vector2, point: Vector2):
+    #         return (point.x - p1.x) * (p2.y - p1.y) - (point.y - p1.y) * (p2.x - p1.x)
+    #
+    #     minus_count = 0
+    #     plus_count = 0
+    #     nul_count = 0
+    #
+    #     for i in range(len(vertexes)):
+    #         p1 = Vector2(*vertexes[i])
+    #         p2 = Vector2(*vertexes[(i + 1) % len(vertexes)])
+    #
+    #         res = equation(p1, p2, point)
+    #         if abs(res) < EPS:
+    #             nul_count += 1
+    #             continue
+    #
+    #         if res > 0:
+    #             plus_count += 1
+    #         else:
+    #             minus_count += 1
+    #
+    #         # if plus_count + nul_count == len(vertexes2) or \
+    #         #         minus_count + nul_count == len(vertexes2):
+    #         #     return False
+    #
+    #     return True
 
     def movement(self):
         if self.movement_flag:
