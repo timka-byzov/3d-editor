@@ -22,10 +22,9 @@ class Cube(Object3D):
         self.scale(2)
         self.translate(position)
         # self.rotate_y(math.pi / 4)
-
         self.font = pg.font.SysFont('Arial', 30, bold=True)
         self.color_faces = [(pg.Color('blue'), face) for face in self.faces]
-        self.movement_flag, self.draw_vertexes = True, False
+        self.movement_flag, self.draw_vertexes = False, False
         #self.rotate_y(math.pi * -0.1)
         self.label = ''
 
@@ -40,7 +39,7 @@ class Tetrahedron(Object3D):
         #self.faces = np.array([[0, 3, 1]])
 
         self.color_faces = [(pg.Color('pink'), face) for face in self.faces]
-        self.movement_flag, self.draw_vertexes = True, False
+        self.movement_flag, self.draw_vertexes = False, False
         self.scale(2)
         # self.rotate_y(math.pi * 0.6)
         self.translate(position)

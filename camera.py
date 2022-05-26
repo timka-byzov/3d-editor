@@ -48,22 +48,22 @@ class Camera:
         if key[pg.K_DOWN]:
             self.camera_pitch(self.rotation_speed)
 
-        mouse = pg.mouse.get_pressed(num_buttons=3)[0]
-        if mouse:
-            if self.prev_x is None:
-                self.prev_x, self.prev_y = pg.mouse.get_pos()
-            else:
-                x, y = pg.mouse.get_pos()
-                kx = -(x - self.prev_x) / 35
-                ky = -(y - self.prev_y) / 35
-                self.camera_yaw(self.rotation_speed * kx)
-                #self.camera_pitch(self.rotation_speed * ky)
-
-                self.prev_x, self.prev_y = x, y
-
-        else:
-            self.prev_x = None
-            self.prev_y = None
+        # mouse = pg.mouse.get_pressed(num_buttons=3)[0]
+        # if mouse:
+        #     if self.prev_x is None:
+        #         self.prev_x, self.prev_y = pg.mouse.get_pos()
+        #     else:
+        #         x, y = pg.mouse.get_pos()
+        #         kx = -(x - self.prev_x) / 35
+        #         ky = -(y - self.prev_y) / 35
+        #         self.camera_yaw(self.rotation_speed * kx)
+        #         #self.camera_pitch(self.rotation_speed * ky)
+        #
+        #         self.prev_x, self.prev_y = x, y
+        #
+        # else:
+        #     self.prev_x = None
+        #     self.prev_y = None
 
     # def rotate_canvas(self):
 

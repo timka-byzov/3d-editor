@@ -14,17 +14,42 @@ def any_func(arr, a, b):
 
 
 class Object3D:
+    pressed = False
 
     def __init__(self, render, shading=True, vertexes='', faces=''):
         self.render = render
         self.vertexes = np.array([np.array(v) for v in vertexes])
         self.faces = np.array([np.array(face) for face in faces])
         self.shading = shading
-
+        self.is_highlighted = False
         self.font = pg.font.SysFont('Arial', 30, bold=True)
         self.color_faces = [(pg.Color('orange'), face) for face in self.faces]
         self.movement_flag, self.draw_vertexes = False, False
         self.label = ''
+        self.on_scale = False
+        self.prev_x = None
+        self.prev_y = None
+        self.scale_value = 1
+
+    @classmethod
+    def update(cls, render, objects: list):
+        vertexes = []
+        projected_vertexes = []
+        objects_colors_faces = []
+
+        for i, object in enumerate(objects):
+            object.movement()
+
+            shaded_colors = [(object.calculate_shade(face_color[1], face_color[0]), face_color[1]) for face_color in
+                             object.color_faces]
+            obj_verts = object.vertexes @ render.camera.camera_matrix()  # переводим в пространство камеры
+            projected_vertexes.append(cls.project_on_plain(render, obj_verts))
+            vertexes.append(obj_verts)
+            objects_colors_faces += [(i, shaded_color) for shaded_color in shaded_colors]
+
+        cls.sort_faces(objects_colors_faces, vertexes, projected_vertexes)
+        cls.control(objects_colors_faces, projected_vertexes, objects)
+        cls.draw_objects(objects_colors_faces, projected_vertexes, render, objects)
 
     @classmethod
     def check_point_in_face_on_plane(cls, point: Vector2, face_coords):  # (edges(x, y))
@@ -88,21 +113,7 @@ class Object3D:
         return False
 
     @classmethod
-    def draw_objects(cls, render, objects: list):
-
-        vertexes = []
-        objects_colors_faces = []
-
-        for i, object in enumerate(objects):
-            object.movement()
-
-            shaded_colors = [(object.calculate_shade(face_color[1], face_color[0]), face_color[1]) for face_color in
-                             object.color_faces]
-
-            obj_verts = object.vertexes @ render.camera.camera_matrix()  # переводим в пространство камеры
-            vertexes.append(obj_verts)
-            objects_colors_faces += [(i, shaded_color) for shaded_color in shaded_colors]
-
+    def sort_faces(cls, objects_colors_faces, vertexes, projected_vertexes):
         for k in range(len(objects_colors_faces) - 1):
             for i in range(k, len(objects_colors_faces)):
 
@@ -120,8 +131,8 @@ class Object3D:
 
                     t1 = cls.check_face_camera_same_side_in_camera_space(vertexes1, vertexes2)
                     t2 = not cls.check_face_camera_same_side_in_camera_space(vertexes2, vertexes1)
-                    t3 = cls.check_intersection(cls.project_on_plain(render, vertexes1),
-                                                cls.project_on_plain(render, vertexes2))
+                    t3 = cls.check_intersection([projected_vertexes[object1][_] for _ in vertexes_set1],
+                                                [projected_vertexes[object2][_] for _ in vertexes_set2])
 
                     if t3 and t2 and t1:
                         break
@@ -131,14 +142,16 @@ class Object3D:
                                                                        objects_colors_faces[k]
                     break
 
-        for vert_set_num in range(len(vertexes)):
-            temp_verts = vertexes[vert_set_num]
-            temp_verts = temp_verts @ render.projection.projection_matrix
-            temp_verts /= temp_verts[:, -1].reshape(-1, 1)
-            temp_verts[(temp_verts > 2) | (temp_verts < -2)] = 0
-            temp_verts = temp_verts @ render.projection.to_screen_matrix
-            temp_verts = temp_verts[:, :2]
-            vertexes[vert_set_num] = temp_verts
+    @classmethod
+    def draw_objects(cls, objects_colors_faces, vertexes, render, objects):
+        # for vert_set_num in range(len(vertexes)):
+        #     temp_verts = vertexes[vert_set_num]
+        #     temp_verts = temp_verts @ render.projection.projection_matrix
+        #     temp_verts /= temp_verts[:, -1].reshape(-1, 1)
+        #     temp_verts[(temp_verts > 2) | (temp_verts < -2)] = 0
+        #     temp_verts = temp_verts @ render.projection.to_screen_matrix
+        #     temp_verts = temp_verts[:, :2]
+        #     vertexes[vert_set_num] = temp_verts
 
         for index, color_face in enumerate(objects_colors_faces):
             object_num, tup = color_face
@@ -153,7 +166,10 @@ class Object3D:
             polygon = vertexes[object_num][face]
             if not any_func(polygon, render.H_WIDTH, render.H_HEIGHT):
                 pg.draw.polygon(render.screen, color, polygon)
-                # pg.draw.polygon(self.render.screen, (255, 255, 255), polygon, 1)
+                if objects[object_num].is_highlighted:
+                    pg.draw.polygon(render.screen, (255, 255, 255), polygon, 2)
+                    for vertex in polygon:
+                        pg.draw.circle(render.screen, (255, 255, 255), vertex, 5)
                 # if self.label:
                 #     text = self.font.render(self.label[index], True, pg.Color('white'))
                 #     self.render.screen.blit(text, polygon[-1])
@@ -211,38 +227,11 @@ class Object3D:
         t2 = cls.check_points_intersection(vertexes1, vertexes2)
         return t1 or t2
 
-    # @classmethod
-    # def find_point_inside(cls, vertexes, point: Vector2):
-    #     def equation(p1: Vector2, p2: Vector2, point: Vector2):
-    #         return (point.x - p1.x) * (p2.y - p1.y) - (point.y - p1.y) * (p2.x - p1.x)
-    #
-    #     minus_count = 0
-    #     plus_count = 0
-    #     nul_count = 0
-    #
-    #     for i in range(len(vertexes)):
-    #         p1 = Vector2(*vertexes[i])
-    #         p2 = Vector2(*vertexes[(i + 1) % len(vertexes)])
-    #
-    #         res = equation(p1, p2, point)
-    #         if abs(res) < EPS:
-    #             nul_count += 1
-    #             continue
-    #
-    #         if res > 0:
-    #             plus_count += 1
-    #         else:
-    #             minus_count += 1
-    #
-    #         # if plus_count + nul_count == len(vertexes2) or \
-    #         #         minus_count + nul_count == len(vertexes2):
-    #         #     return False
-    #
-    #     return True
-
     def movement(self):
         if self.movement_flag:
-            self.rotate_y(-(pg.time.get_ticks() % 0.005))
+            self.rotate_y(-(pg.time.get_ticks() % 0.005) * 10)
+            # self.rotate_x(-(pg.time.get_ticks() % 0.005) * 5)
+
         pass
 
     def calculate_shade(self, face, color):
@@ -297,3 +286,99 @@ class Object3D:
 
     def rotate_z(self, angle):
         self.vertexes = self.vertexes @ rotate_z(angle)
+
+    # @classmethod
+    # def find_visible_points(cls, objects_colors_faces, projected_vertexes, render):
+    #     for i in range(len(objects_colors_faces) - 1, -1, -1):
+    #         object, tup = objects_colors_faces[i]
+    #         color, vertexes_set = tup
+    #         face = [projected_vertexes[object][_] for _ in vertexes_set]
+    #
+    #         count = 0
+    #         for vertex in projected_vertexes:
+    #             if cls.check_point_in_face_on_plane(Vector2(vertex[0], vertex[1]), face):
+    #                 count += 1
+    #
+
+    @classmethod
+    def check_point_click_inside(cls, point: Vector2, face, radius):
+        for vertex in face:
+            point2 = Vector2(vertex[0], vertex[1])
+            d = point2.get_dist(point)
+            if d <= radius:
+                return True
+        return False
+
+    @classmethod
+    def check_point_click_outside(cls, point: Vector2, object_vertexes, radius):
+        for vertex in object_vertexes:
+            point2 = Vector2(vertex[0], vertex[1])
+            if point2.get_dist(point) <= radius:
+                return True
+
+        return False
+
+    @classmethod
+    def check_click(cls, point: Vector2, objects_colors_faces, projected_vertexes, objects):
+        for i in range(len(objects_colors_faces) - 1, -1, -1):
+            object, tup = objects_colors_faces[i]
+            color, vertexes_set = tup
+            face = [projected_vertexes[object][_] for _ in vertexes_set]
+
+            # for i in range(len(objects)):
+            #     objects[i].is_highlighted = False
+
+            if cls.check_point_in_face_on_plane(point, face) and not cls.pressed:
+                if not objects[object].is_highlighted:
+                    for j in range(len(objects)):
+                        objects[j].is_highlighted = False
+
+                    objects[object].is_highlighted = True
+                    print(object)
+
+                if not cls.pressed and cls.check_point_click_inside(point, face, 8):
+                    objects[object].on_scale = True
+                    # objects_colors_faces[i] = (object, ((255, 255, 255), vertexes_set))
+                    return
+                return
+
+            if not cls.pressed and cls.check_point_click_outside(point, projected_vertexes[object], 8):
+                objects[object].on_scale = True
+                return
+
+    def mouse_scale(self):
+        def clip(scale_value):
+            if scale_value < 0.5:
+                return 0.5
+            if scale_value > 2:
+                return 2
+            return scale_value
+
+        if self.on_scale:
+            if self.prev_x is None:
+                self.prev_x, self.prev_y = pg.mouse.get_pos()
+            else:
+                x, y = pg.mouse.get_pos()
+                scale_delta = 1 + (-x + self.prev_x) / 100
+                new_scale_value = clip(self.scale_value * scale_delta)
+                # self.scale_value =
+                self.scale(self.scale_value / new_scale_value)
+                self.scale_value = new_scale_value
+                self.prev_x, self.prev_y = x, y
+
+    @classmethod
+    def control(cls, objects_colors_faces, projected_vertexes, objects):
+        mouse = pg.mouse.get_pressed(num_buttons=3)[0]
+        if mouse:
+            for object in objects:
+                object.mouse_scale()
+            x, y = pg.mouse.get_pos()
+            cls.check_click(Vector2(x, y), objects_colors_faces, projected_vertexes, objects)
+            cls.pressed = True
+
+        elif cls.pressed:
+            for object in objects:
+                object.prev_x = None
+                object.prev_y = None
+                object.on_scale = False
+                cls.pressed = False
