@@ -348,8 +348,8 @@ class Object3D:
 
     def mouse_scale(self):
         def clip(scale_value):
-            if scale_value < 0.5:
-                return 0.5
+            if scale_value < 0.7:
+                return 0.7
             if scale_value > 2:
                 return 2
             return scale_value

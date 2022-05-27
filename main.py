@@ -4,7 +4,7 @@ from projection import *
 import pygame as pg
 from light import Light
 from vector import Vector3
-from objects_collection import Cube, Axes, Tetrahedron
+from objects_collection import Cube, Tetrahedron
 
 
 class SoftwareRender:
@@ -22,7 +22,7 @@ class SoftwareRender:
         self.camera = Camera(self, [1, 6, -30], True)
         self.projection = Projection(self)
         # self.objects = [Cube(self, shading=True)]  # , Axes(self, shading=False)]  # self.get_object_from_file('resources/t_34_obj.obj')
-        self.objects = [Tetrahedron(self, True, (0, 0, 5)), Cube(self, True, (0, 0, -5)), Cube(self, True, (-5, 0, 0))]
+        self.objects = [Tetrahedron(self, True, (5, 0, 5)), Cube(self, True, (-5, 0, 5))]
 
         # self.object.rotate_y(-math.pi / 4)
         # self.axes = Axes(self)
