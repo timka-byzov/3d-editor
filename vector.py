@@ -1,3 +1,4 @@
+import math
 from math import pow, sqrt
 import colorsys
 
@@ -77,6 +78,11 @@ class Vector2:
 
     def __repr__(self):
         return f"vec2-> ({self.x}, {self.y})"
+
+    def get_dist(self, b):
+        return math.sqrt((self.x - b.x) * (self.x - b.x) +
+                         (self.y - b.y) * (self.y - b.y))
+
 
 
 def toVector3(matrix):
