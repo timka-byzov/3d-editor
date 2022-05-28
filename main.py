@@ -16,13 +16,13 @@ class SoftwareRender:
         self.screen = pg.display.set_mode(self.RES)
         self.clock = pg.time.Clock()
         self.create_objects()
-        self.light = Light(Vector3(0, 20, -30))
+        self.light = Light(Vector3(0,  20, -30))
 
     def create_objects(self):
         self.camera = Camera(self, [1, 6, -30], True)
         self.projection = Projection(self)
         # self.objects = [Cube(self, shading=True)]  # , Axes(self, shading=False)]  # self.get_object_from_file('resources/t_34_obj.obj')
-        self.objects = [Tetrahedron(self, True, (5, 0, 5)), Cube(self, True, (-5, 0, 5))]
+        self.objects = [Tetrahedron(self, True, (5, 0, 5)), Cube(self, True, (-5, 0, 5)), Cube(self, True, (-5, 0, 0)), Cube(self, True, (5, 0, 0))]
 
         # self.object.rotate_y(-math.pi / 4)
         # self.axes = Axes(self)
