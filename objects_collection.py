@@ -1,5 +1,4 @@
 import math
-
 import numpy as np
 
 from object_3d import *
@@ -43,6 +42,7 @@ class Tetrahedron(Object3D):
         self.scale(2)
         # self.rotate_y(math.pi * 0.6)
         self.translate(position)
+        self.rotate_y(math.pi / 2)
 
 
 class Axes(Object3D):
