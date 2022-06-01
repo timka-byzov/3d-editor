@@ -1,5 +1,5 @@
 import math
-
+from vector import Vector3
 import pygame as pg
 from matrix_functions import *
 
@@ -7,7 +7,7 @@ from matrix_functions import *
 class Camera:
     def __init__(self, render, position, control_flag=False):
         self.render = render
-        self.position = np.array([*position, 1.0])
+        self.position = np.array([*position, 1])
         self.forward = np.array([0, 0, 1, 1])
         self.up = np.array([0, 1, 0, 1])
         self.right = np.array([1, 0, 0, 1])
@@ -22,7 +22,6 @@ class Camera:
         self.prev_y = None
 
     def control(self):
-
         if not self.control_flag:
             return
         key = pg.key.get_pressed()
@@ -59,6 +58,34 @@ class Camera:
         self.forward = self.forward @ rotate
         self.right = self.right @ rotate
         self.up = self.up @ rotate
+
+    def camera_rotate_scene_matrix(self, v: Vector3, angle):
+        cos = math.cos(angle)
+        sin = math.sin(angle)
+
+        return np.array([
+            [cos + (1 - cos) * v.x * v.x, (1 - cos) * v.x * v.y - sin * v.z, (1 - cos) * v.x * v.z + sin * v.y, 0],
+            [(1 - cos) * v.y * v.x + sin * v.z, cos + (1 - cos) * v.y * v.y, (1 - cos) * v.y * v.z - sin * v.x, 0],
+            [(1 - cos) * v.z * v.x - sin * v.y, (1 - cos) * v.z * v.y + sin * v.x, cos + (1 - cos) * v.z * v.z, 0],
+            [0, 0, 0, 1]
+        ])
+
+    def camera_rotate_scene(self, v: Vector3, angle):
+        rotate = self.camera_rotate_scene_matrix(v, angle)
+        self.position = self.position @ rotate
+        #self.position = self.position @ translate((new_pos - self.position)[:3])
+        self.forward = self.forward @ rotate
+        self.right = self.right @ rotate
+        self.up = self.up @ rotate
+
+    def camera_rotate_scene_x(self, angle):
+        vx = Vector3(*self.right[:3])
+        self.camera_rotate_scene(vx, angle)
+
+    def camera_rotate_scene_y(self, angle):
+        # vy = Vector3(*self.up[:3])
+        vy = Vector3(0, 1, 0)
+        self.camera_rotate_scene(vy, angle)
 
     def translate_matrix(self):
         x, y, z, w = self.position

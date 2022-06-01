@@ -1,49 +1,55 @@
 import pygame as pg
 import math
-from vector import Vector2
+from vector import *
 from object_3d import Object3D
 
 
 class Control:
     figure_on_edit = False
+    scene_on_rotation = False
 
     @classmethod
-    def update(cls, objects):
+    def update(cls, render, objects):
         mouse = pg.mouse.get_pressed(num_buttons=3)
         mouse_pos = pg.mouse.get_pos()
 
-        FiguresControl.control(mouse, mouse_pos, objects)
-        cls.figure_on_edit = FiguresControl.mouse_hold
-
         if not cls.figure_on_edit:
-            SceneControl.control(mouse, mouse_pos, objects)
+            SceneControl.control(render.camera, mouse, mouse_pos, objects)
+            cls.scene_on_rotation = SceneControl.on_rotation
+        if not cls.scene_on_rotation:
+            FiguresControl.control(mouse, mouse_pos, objects)
+            cls.figure_on_edit = FiguresControl.mouse_hold
 
 
 class SceneControl:
     prev_x = None
     prev_y = None
-    deg_rad = math.pi / 180
+    on_rotation = False
 
     # @classmethod
     # def update(cls, mouse, mouse_pos, objects):
     #     cls.control(mouse, mouse_pos, objects)
 
     @classmethod
-    def control(cls, mouse, mouse_pos, objects: list):
+    def control(cls, camera, mouse, mouse_pos, objects: list):
         if mouse[0]:
             if cls.prev_x is None:
                 cls.prev_x, cls.prev_y = mouse_pos
             else:
                 x, y = pg.mouse.get_pos()
                 kx = -(x - cls.prev_x) / 35
-                # ky = -(y - cls.prev_y) / 35
+                ky = -(y - cls.prev_y) / 35
 
-                for object in objects:
-                    object.rotate_global_y(kx * cls.deg_rad * 5)
-                    # object.rotate_global_x(ky * cls.deg_rad * 5)
-                    cls.prev_x, cls.prev_y = x, y
+                camera.camera_rotate_scene_y(kx * math.pi / 15)
+                camera.camera_rotate_scene_x(ky * math.pi / 15)
+
+                cls.prev_x = x
+                cls.prev_y = y
+
+                cls.on_rotation = True
 
         else:
+            cls.on_rotation = False
             cls.prev_x = None
             cls.prev_y = None
 
@@ -69,7 +75,7 @@ class FiguresControl:
         x, y = mouse_pos
         clicked_obj, is_point_click = Object3D.check_click(Vector2(x, y), objects)
         if clicked_obj is not None:
-            if not cls.mouse_hold: #new_move
+            if not cls.mouse_hold:  # new_move
                 cls.mouse_hold = True
                 # sbros
                 cls.reset_objects(objects)

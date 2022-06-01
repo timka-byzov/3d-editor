@@ -18,6 +18,7 @@ class Object3D:
     vertexes = []
     projected_vertexes = []
     objects_colors_faces = []
+    render = None
 
     def __init__(self, render, shading=True, vertexes='', faces=''):
         self.render = render
@@ -38,6 +39,109 @@ class Object3D:
 
     def get_vertexes(self):
         return self.vertexes @ self.transform_matrix
+
+    # def add_face(self, point1, point2, old_points_nums):
+    #     last_num = len(self.vertexes)
+    #     self.vertexes.append([*point1, 1])
+    #     self.vertexes.append([*point2, 1])
+    #     self.faces += [last_num] + old_points_nums + [last_num + 1]
+
+    @classmethod
+    def make_faces_intersections_in_space(cls):
+        def get_point_in_intersection(equation1, equation2):
+            for i in range(3):
+                for j in range(3):
+                    if i == j:
+                        continue
+                    a = np.array([[equation1[i], equation1[j]], [equation2[i], equation2[j]]])
+                    if np.linalg.det(a) == 0:
+                        continue
+                    b = np.array([-equation1[3], -equation2[3]])
+
+                    solution = np.linalg.solve(a, b)
+                    res = [0] * 3
+                    res[i], res[j] = solution[0], solution[1]
+
+                    return res
+
+        res_faces = []
+        res_vertexes = cls.vertexes[:]
+        for i in range(len(cls.objects_colors_faces)):
+            object1, tup1 = cls.objects_colors_faces[i]
+            color1, vertexes_set1 = tup1
+            vertexes1 = [cls.vertexes[object1][_] for _ in vertexes_set1]
+            equation1 = cls.get_face_equation(vertexes1)
+
+            res_faces.append((object1, (color1, vertexes_set1)))
+
+            for j in range(len(cls.objects_colors_faces)):
+
+                if i == j:
+                    continue
+
+                object2, tup2 = cls.objects_colors_faces[j]
+                color2, vertexes_set2 = tup2
+                vertexes2 = [cls.vertexes[object2][_] for _ in vertexes_set2]
+                equation2 = cls.get_face_equation(vertexes2)
+
+                norm_v1 = Vector3(equation1[0], equation1[1], equation1[2])
+                norm_v2 = Vector3(equation2[0], equation2[1], equation2[2])
+
+                if norm_v1 * norm_v2 == 0:
+                    continue
+
+                new_points = []
+                left_points = []
+                right_points = []
+                is_left_points = True
+                dir_vec = crossProduct(norm_v1, norm_v2)
+                point = Vector3(*get_point_in_intersection(equation1, equation2))
+
+                for k in range(len(vertexes2)):
+                    p1 = Vector3(*vertexes2[k][:3])
+                    p2 = Vector3(*vertexes2[(k + 1) % len(vertexes2)][:3])
+
+                    edge_vec = p2 - p1
+
+                    a = np.array([[dir_vec.x, -edge_vec.x], [dir_vec.y, -edge_vec.y]])
+                    b = np.array([p1.x - point.x, p1.y - point.y])
+
+                    if is_left_points:
+                        left_points.append(vertexes2[k])
+                    else:
+                        right_points.append(vertexes2[k])
+
+                    try:
+                        t, q = np.linalg.solve(a, b)
+                        if -EPS < q < 1 + EPS:
+                            t = p1 + edge_vec * q
+                            coords = cls.project_on_plain(cls.render, np.array([[t.x, t.y, t.z, 1]]))
+                            pg.draw.circle(cls.render.screen, (255, 255, 255), (coords[0][0], coords[0][1]), 5)
+                            new_points.append(p1 + edge_vec * q)
+                            is_left_points = not is_left_points
+
+                    except:
+                        # t = p1 + edge_vec * q
+                        # coords = cls.project_on_plain(cls.render, np.array([[t.x, t.y, t.z, 1]]))
+                        # pg.draw.circle(cls.render.screen, (255, 255, 255), (coords[0][0], coords[0][1]), 5)
+                        continue
+
+                if len(new_points) < 2:
+                    res_faces.append((object2, (color2, vertexes_set2)))
+                    continue
+                cls.add_new_fictive_face(res_vertexes, new_points[0], new_points[1], left_points, color2, object2)
+                cls.add_new_fictive_face(res_vertexes, new_points[0], new_points[1], right_points, color2, object2)
+
+        cls.objects_colors_faces = res_faces
+        cls.vertexes = res_vertexes
+
+    @classmethod
+    def add_new_fictive_face(cls, vertexes, point1, point2, old_vertexes, color, obj):
+        obj_count = len(cls.objects_colors_faces)
+        vert_set = list(range(len(old_vertexes) + 2))
+        obj_verts = [[point1.x, point1.y, point1.z, 1]] + old_vertexes + [[point2.x, point2.y, point2.z, 1]]
+        vertexes.append(obj_verts)
+        cls.objects_colors_faces.append((obj_count, (color, np.array(vert_set))))
 
     @classmethod
     def make_svalka(cls, render, objects):
@@ -64,8 +168,10 @@ class Object3D:
         # cls.control(objects_colors_faces, projected_vertexes, objects)
         for object in objects:
             object.self_update()
+        cls.render = render
         cls.make_svalka(render, objects)
-        cls.sort_faces(cls.objects_colors_faces, cls.vertexes, cls.projected_vertexes)
+        #cls.make_faces_intersections_in_space()
+        cls.sort_faces()
         cls.draw_objects(render, objects)
 
     @classmethod
@@ -130,45 +236,38 @@ class Object3D:
         return False
 
     @classmethod
-    def sort_faces(cls, objects_colors_faces, vertexes, projected_vertexes):
-        for k in range(len(objects_colors_faces) - 1):
-            for i in range(k, len(objects_colors_faces)):
+    def sort_faces(cls):
+        for k in range(len(cls.objects_colors_faces) - 1):
+            for i in range(k, len(cls.objects_colors_faces)):
 
-                object1, tup1 = objects_colors_faces[i]
+                object1, tup1 = cls.objects_colors_faces[i]
                 color1, vertexes_set1 = tup1
-                vertexes1 = [vertexes[object1][_] for _ in vertexes_set1]
+                vertexes1 = [cls.vertexes[object1][_] for _ in vertexes_set1]
 
-                for j in range(k, len(objects_colors_faces)):
+                for j in range(k, len(cls.objects_colors_faces)):
                     if i == j:
                         continue
 
-                    object2, tup2 = objects_colors_faces[j]
+                    object2, tup2 = cls.objects_colors_faces[j]
                     color2, vertexes_set2 = tup2
-                    vertexes2 = [vertexes[object2][_] for _ in vertexes_set2]
+                    vertexes2 = [cls.vertexes[object2][_] for _ in vertexes_set2]
 
                     t1 = cls.check_face_camera_same_side_in_camera_space(vertexes1, vertexes2)
                     t2 = not cls.check_face_camera_same_side_in_camera_space(vertexes2, vertexes1)
-                    t3 = cls.check_intersection([projected_vertexes[object1][_] for _ in vertexes_set1],
-                                                [projected_vertexes[object2][_] for _ in vertexes_set2])
+                    t3 = cls.check_intersection([cls.projected_vertexes[object1][_] for _ in vertexes_set1],
+                                                [cls.projected_vertexes[object2][_] for _ in vertexes_set2])
 
                     if t3 and t2 and t1:
                         break
 
                 else:
-                    objects_colors_faces[k], objects_colors_faces[i] = objects_colors_faces[i], \
-                                                                       objects_colors_faces[k]
+                    cls.objects_colors_faces[k], cls.objects_colors_faces[i] = cls.objects_colors_faces[i], \
+                                                                               cls.objects_colors_faces[k]
                     break
 
     @classmethod
     def draw_objects(cls, render, objects):
-        # for vert_set_num in range(len(vertexes)):
-        #     temp_verts = vertexes[vert_set_num]
-        #     temp_verts = temp_verts @ render.projection.projection_matrix
-        #     temp_verts /= temp_verts[:, -1].reshape(-1, 1)
-        #     temp_verts[(temp_verts > 2) | (temp_verts < -2)] = 0
-        #     temp_verts = temp_verts @ render.projection.to_screen_matrix
-        #     temp_verts = temp_verts[:, :2]
-        #     vertexes[vert_set_num] = temp_verts
+        print(cls.objects_colors_faces)
 
         for index, color_face in enumerate(cls.objects_colors_faces):
             object_num, tup = color_face
@@ -236,7 +335,7 @@ class Object3D:
             else:
                 plus_count += 1
 
-        return (plus_count == 0 and camera_side <= 0) or (minus_count == 0 and camera_side >= 0)
+        return (minus_count > 0 and camera_side <= 0) or (plus_count > 0 and camera_side >= 0)
 
     @classmethod
     def check_intersection(cls, vertexes1, vertexes2):
@@ -258,7 +357,7 @@ class Object3D:
         v1 = Vector3(*verts[0][:3])
         v2 = Vector3(*verts[1][:3])
         v3 = Vector3(*verts[2][:3])
-        lite_direction = self.render.light.direction
+        lite_direction = Vector3(*self.render.camera.forward[:3])
         normal = Normalize(crossProduct((v2 - v1), (v3 - v1)))
 
         # if dotProduct(Vector3(*self.vertexes[0][:3]), normal) > 0:
@@ -372,6 +471,11 @@ class Object3D:
 
         return None, False
 
+    # @classmethod
+    # def
+    #
+
+    # --contol --
     def mouse_scale(self):
         def clip(scale_value):
             if scale_value < 0.7:

@@ -55,3 +55,17 @@ class Axes(Object3D):
         self.draw_vertexes = False
         self.movement_flag = False
         self.label = 'XYZ'
+
+
+class Plain(Object3D):
+    def __init__(self, render, shading, position=(0, 0, 0), rotation=0):
+        super().__init__(render, shading)
+        self.translate(position)
+        self.vertexes = np.array([(-1, 0, -1, 1), (-1, 0, 1, 1), (1, 0, 1, 1), (1, 0, -1, 1)])
+        self.faces = np.array([[0, 1, 2, 3]])
+        self.colors = [pg.Color('red'), pg.Color('green'), pg.Color('blue')]
+        self.color_faces = [(color, face) for color, face in zip(self.colors, self.faces)]
+        self.draw_vertexes = False
+        self.movement_flag = False
+        self.scale(2)
+        self.rotate_x(rotation)

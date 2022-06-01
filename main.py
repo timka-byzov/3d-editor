@@ -2,10 +2,10 @@ from object_3d import *
 from camera import *
 from projection import *
 import pygame as pg
-from light import Light
 from vector import Vector3
-from objects_collection import Cube, Tetrahedron
+from objects_collection import *
 from control import *
+
 
 class SoftwareRender:
     def __init__(self):
@@ -16,13 +16,14 @@ class SoftwareRender:
         self.screen = pg.display.set_mode(self.RES)
         self.clock = pg.time.Clock()
         self.create_objects()
-        self.light = Light(Vector3(0,  20, -30))
+        # self.light = Light(Vector3(0,  20, -30))
 
     def create_objects(self):
-        self.camera = Camera(self, [1, 6, -30], True)
+        self.camera = Camera(self, [0, 0, -30], True)
         self.projection = Projection(self)
-        # self.objects = [Cube(self, shading=True)]  # , Axes(self, shading=False)]  # self.get_object_from_file('resources/t_34_obj.obj')
-        self.objects = [Tetrahedron(self, True, (5, 0, 5)), Cube(self, True, (-5, 0, 5))]
+        self.objects = [Cube(self, shading=True, position=(0, 0, 0)), Tetrahedron(self, shading=True, position=(0, 0, 5))]  # , Axes(self, shading=False)]  # self.get_object_from_file('resources/t_34_obj.obj')
+        #self.objects = [Plain(self, True), Plain(self, True, (0, 5, 5), -math.pi / 4)]
+        self.camera.camera_rotate_scene_x(math.pi / 4 * 0.9)
 
         # self.object.rotate_y(-math.pi / 4)
         # self.axes = Axes(self)
@@ -42,21 +43,21 @@ class SoftwareRender:
         self.screen.fill(pg.Color('darkslategray'))
         # for object in self.objects:
         #     object.draw()
-
+        #self.camera.camera_rotate_scene(Vector3(0, 1, 0), math.pi / 60)
+        # self.camera.control()
         Object3D.update(self, self.objects)
-        Control.update(self.objects)
+        Control.update(self, self.objects)
         Object3D.draw_objects(self, self.objects)
         # self.axes.draw()
 
     def run(self):
         while True:
             self.update()
-            self.camera.control()
+
             [exit() for i in pg.event.get() if i.type == pg.QUIT]
             pg.display.set_caption(str(self.clock.get_fps()))
             pg.display.update()
             self.clock.tick(self.FPS)
-
 
 
 if __name__ == '__main__':
