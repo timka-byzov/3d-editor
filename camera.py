@@ -1,5 +1,5 @@
 import math
-
+from vector import Vector3
 import pygame as pg
 from matrix_functions import *
 
@@ -7,7 +7,7 @@ from matrix_functions import *
 class Camera:
     def __init__(self, render, position, control_flag=False):
         self.render = render
-        self.position = np.array([*position, 1.0])
+        self.position = np.array([*position, 1])
         self.forward = np.array([0, 0, 1, 1])
         self.up = np.array([0, 1, 0, 1])
         self.right = np.array([1, 0, 0, 1])
@@ -22,7 +22,6 @@ class Camera:
         self.prev_y = None
 
     def control(self):
-
         if not self.control_flag:
             return
         key = pg.key.get_pressed()
@@ -48,25 +47,6 @@ class Camera:
         if key[pg.K_DOWN]:
             self.camera_pitch(self.rotation_speed)
 
-        mouse = pg.mouse.get_pressed(num_buttons=3)[0]
-        if mouse:
-            if self.prev_x is None:
-                self.prev_x, self.prev_y = pg.mouse.get_pos()
-            else:
-                x, y = pg.mouse.get_pos()
-                kx = -(x - self.prev_x) / 35
-                ky = -(y - self.prev_y) / 35
-                self.camera_yaw(self.rotation_speed * kx)
-                #self.camera_pitch(self.rotation_speed * ky)
-
-                self.prev_x, self.prev_y = x, y
-
-        else:
-            self.prev_x = None
-            self.prev_y = None
-
-    # def rotate_canvas(self):
-
     def camera_yaw(self, angle):
         rotate = rotate_y(angle)
         self.forward = self.forward @ rotate
@@ -78,6 +58,26 @@ class Camera:
         self.forward = self.forward @ rotate
         self.right = self.right @ rotate
         self.up = self.up @ rotate
+
+    def camera_rotate_scene_matrix(self, v: Vector3, angle):
+        return rotate_around_vector(v, angle)
+
+    def camera_rotate_scene(self, v: Vector3, angle):
+        rotate = self.camera_rotate_scene_matrix(v, angle)
+        self.position = self.position @ rotate
+        #self.position = self.position @ translate((new_pos - self.position)[:3])
+        self.forward = self.forward @ rotate
+        self.right = self.right @ rotate
+        self.up = self.up @ rotate
+
+    def camera_rotate_scene_x(self, angle):
+        vx = Vector3(*self.right[:3])
+        self.camera_rotate_scene(vx, angle)
+
+    def camera_rotate_scene_y(self, angle):
+        # vy = Vector3(*self.up[:3])
+        vy = Vector3(0, 1, 0)
+        self.camera_rotate_scene(vy, angle)
 
     def translate_matrix(self):
         x, y, z, w = self.position
