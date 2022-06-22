@@ -5,7 +5,7 @@ from object_3d import *
 
 
 class Cube(Object3D):
-    def __init__(self, renderer, shading, position):
+    def __init__(self, renderer, shading=True, position=(0, 0, 0), ):
         super().__init__(renderer, shading)
 
         self.vertexes = np.array([[-1, -1, -1, 1], [-1, 1, -1, 1], [1, 1, -1, 1], [1, -1, -1, 1],
@@ -27,9 +27,12 @@ class Cube(Object3D):
         #self.rotate_y(math.pi * -0.1)
         self.label = ''
 
+    def __str__(self):
+        return "cube"
+
 
 class Tetrahedron(Object3D):
-    def __init__(self, renderer, shading, position):
+    def __init__(self, renderer, shading=True, position=(0, 0, 0)):
         super().__init__(renderer, shading)
 
         self.vertexes = np.array([[-1, -1, -1, 1], [1, -1, -1, 1], [0, -1, 1, 1], [0, 1, 0, 1]])
@@ -42,8 +45,11 @@ class Tetrahedron(Object3D):
         self.scale(2)
         # self.rotate_y(math.pi * 0.6)
         self.translate(position)
+        self.translate((1, 0, 0))
         self.rotate_y(math.pi / 2)
 
+    def __str__(self):
+        return "tetrahedron"
 
 class Axes(Object3D):
     def __init__(self, render, shading):
@@ -54,7 +60,7 @@ class Axes(Object3D):
         self.color_faces = [(color, face) for color, face in zip(self.colors, self.faces)]
         self.draw_vertexes = False
         self.movement_flag = False
-        self.label = 'XYZ'
+        #self.label = 'XYZ'
 
 
 class Plain(Object3D):
@@ -69,3 +75,6 @@ class Plain(Object3D):
         self.movement_flag = False
         self.scale(2)
         self.rotate_x(rotation)
+
+    def __str__(self):
+        return "plain"

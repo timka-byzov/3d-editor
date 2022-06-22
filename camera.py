@@ -60,15 +60,7 @@ class Camera:
         self.up = self.up @ rotate
 
     def camera_rotate_scene_matrix(self, v: Vector3, angle):
-        cos = math.cos(angle)
-        sin = math.sin(angle)
-
-        return np.array([
-            [cos + (1 - cos) * v.x * v.x, (1 - cos) * v.x * v.y - sin * v.z, (1 - cos) * v.x * v.z + sin * v.y, 0],
-            [(1 - cos) * v.y * v.x + sin * v.z, cos + (1 - cos) * v.y * v.y, (1 - cos) * v.y * v.z - sin * v.x, 0],
-            [(1 - cos) * v.z * v.x - sin * v.y, (1 - cos) * v.z * v.y + sin * v.x, cos + (1 - cos) * v.z * v.z, 0],
-            [0, 0, 0, 1]
-        ])
+        return rotate_around_vector(v, angle)
 
     def camera_rotate_scene(self, v: Vector3, angle):
         rotate = self.camera_rotate_scene_matrix(v, angle)

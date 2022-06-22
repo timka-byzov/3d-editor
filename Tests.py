@@ -6,10 +6,12 @@ import numpy as np
 from main import SoftwareRender
 from object_3d import Object3D
 from matrix_functions import *
+from objects_collection import *
+
+EPS = 1e-6
 
 
 class Tests(unittest.TestCase):
-
     def project(self, render, vertexes):
         projected = vertexes @ render.camera.camera_matrix()
         projected = projected @ render.projection.projection_matrix
@@ -41,7 +43,7 @@ class Tests(unittest.TestCase):
         self.vertexes1 = np.array([[-1, -1, -1, 1], [-1, 1, -1, 1], [1, 1, -1, 1], [1, -1, -1, 1]])
         self.vertexes2 = np.array([[-1, -1, -1, 1], [-1, 1, -1, 1], [1, 1, -1, 1], [1, -1, -1, 1]])
         for i in range(4):
-            self.vertexes2[i] += [3, 2, 0, 0]
+            self.vertexes2[i] += [2, 2, 0, 0]
 
         # self.faces1 = np.array([[0, 1, 2, 3]])
         # self.faces2 = np.array([[0, 1, 2, 3]])
@@ -59,9 +61,13 @@ class Tests(unittest.TestCase):
 
     def test_get_face_equation(self):
         vertexes = np.array([[5, 5, 67], [5, 6, 45], [6, 6, 12]])
-
         res = Object3D.get_face_equation(vertexes)
-        self.assertEqual(res, [0, 0, -1, 0])
+        ans = [-33, -22, -1.0, 342]
+
+        for i in range(4):
+            if abs(res[i] - ans[i]) > EPS:
+                self.assertFalse(None)
+        self.assertTrue(True)
 
     def test_check_face_camera_the_same_side_in_camera_space(self):
         render = SoftwareRender()
@@ -79,3 +85,13 @@ class Tests(unittest.TestCase):
         self.assertEqual(
             Object3D.check_face_camera_same_side_in_camera_space(Q_vertexes @ render.camera.camera_matrix(),
                                                                  P_vertexes @ render.camera.camera_matrix()), False)
+
+    def test_two_faces_the_same_equation(self):
+        render = SoftwareRender()
+        plain1 = Plain(render, True, (0, 0, 0))
+        plain2 = Plain(render, True, (0, 100, 47))
+
+        equation1 = Object3D.get_face_equation(plain1.vertexes)
+        equation2 = Object3D.get_face_equation(plain2.vertexes)
+
+        self.assertEqual(equation1, equation2)

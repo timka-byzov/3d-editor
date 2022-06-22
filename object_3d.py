@@ -4,9 +4,10 @@ from numba import njit
 from vector import *
 import numpy as np
 import math
+import json
 
 dim = 0.01
-EPS = 1e-4
+EPS = 1e-6
 
 
 @njit(fastmath=True)
@@ -35,19 +36,39 @@ class Object3D:
         self.prev_x = None
         self.prev_y = None
         self.scale_value = 1
-        self.transform_matrix = np.array([[1, 0, 0, 0], [0, 1, 0, 0], [0, 0, 1, 0], [0, 0, 0, 1]])
+        self.transform_matrix = np.eye(4)
+        self.on_translate = False
 
     def get_vertexes(self):
         return self.vertexes @ self.transform_matrix
 
-    # def add_face(self, point1, point2, old_points_nums):
-    #     last_num = len(self.vertexes)
-    #     self.vertexes.append([*point1, 1])
-    #     self.vertexes.append([*point2, 1])
-    #     self.faces += [last_num] + old_points_nums + [last_num + 1]
+    @classmethod
+    def sort_faces_2(cls, render):
+        def f(color_face):
+            obj, (color, vertexes_set) = color_face
+
+            vertexes = cls.vertexes[obj][vertexes_set]
+
+            x_av, y_av, z_av = 0, 0, 0
+
+            for vertex in vertexes:
+                x_av += vertex[0]
+                y_av += vertex[1]
+                z_av += vertex[2]
+
+            n = len(vertexes)
+            cam_pos = Vector3(*render.camera.position[:3])
+            av_point = Vector3(x_av / n, y_av / n, z_av / n)
+
+            return cam_pos.get_dist(av_point)
+        cls.objects_colors_faces.sort(key=f, reverse=True)
 
     @classmethod
-    def make_faces_intersections_in_space(cls):
+    def get_faces_intersection_in_space(cls, vertexes1, vert_set1, vertexes2, vert_set2):
+        def equation(face_equation, point: Vector3):
+            return face_equation[0] * point.x + face_equation[1] * point.y + face_equation[2] * point.z + face_equation[
+                3]
+
         def get_point_in_intersection(equation1, equation2):
             for i in range(3):
                 for j in range(3):
@@ -64,84 +85,200 @@ class Object3D:
 
                     return res
 
-        res_faces = []
-        res_vertexes = cls.vertexes[:]
-        for i in range(len(cls.objects_colors_faces)):
-            object1, tup1 = cls.objects_colors_faces[i]
-            color1, vertexes_set1 = tup1
-            vertexes1 = [cls.vertexes[object1][_] for _ in vertexes_set1]
-            equation1 = cls.get_face_equation(vertexes1)
+        equation1 = cls.get_face_equation(vertexes1)
+        equation2 = cls.get_face_equation(vertexes2)
 
-            res_faces.append((object1, (color1, vertexes_set1)))
+        norm_v1 = Vector3(equation1[0], equation1[1], equation1[2])
+        norm_v2 = Vector3(equation2[0], equation2[1], equation2[2])
 
-            for j in range(len(cls.objects_colors_faces)):
+        if norm_v1 * norm_v2 == 0:
+            return None
 
-                if i == j:
-                    continue
+        res = get_point_in_intersection(equation1, equation2)
+        if res is None:
+            return None
+        point = Vector3(*res)
 
-                object2, tup2 = cls.objects_colors_faces[j]
-                color2, vertexes_set2 = tup2
-                vertexes2 = [cls.vertexes[object2][_] for _ in vertexes_set2]
-                equation2 = cls.get_face_equation(vertexes2)
+        dir_vec = crossProduct(norm_v1, norm_v2)
+        # temp1 = cls.get_points_set(point, dir_vec, vertexes1, vert_set1)
+        # if temp1 is None:  # daleko daleko
+        #     return None
+        # new_points1, points_set1 = temp1
 
-                norm_v1 = Vector3(equation1[0], equation1[1], equation1[2])
-                norm_v2 = Vector3(equation2[0], equation2[1], equation2[2])
+        temp2 = cls.get_points_set(point, dir_vec, vertexes2, vert_set2)
+        if temp2 is None:  # daleko daleko
+            return None
+        new_points2, points_set2 = temp2
 
-                if norm_v1 * norm_v2 == 0:
-                    continue
-
-                new_points = []
-                left_points = []
-                right_points = []
-                is_left_points = True
-                dir_vec = crossProduct(norm_v1, norm_v2)
-                point = Vector3(*get_point_in_intersection(equation1, equation2))
-
-                for k in range(len(vertexes2)):
-                    p1 = Vector3(*vertexes2[k][:3])
-                    p2 = Vector3(*vertexes2[(k + 1) % len(vertexes2)][:3])
-
-                    edge_vec = p2 - p1
-
-                    a = np.array([[dir_vec.x, -edge_vec.x], [dir_vec.y, -edge_vec.y]])
-                    b = np.array([p1.x - point.x, p1.y - point.y])
-
-                    if is_left_points:
-                        left_points.append(vertexes2[k])
-                    else:
-                        right_points.append(vertexes2[k])
-
-                    try:
-                        t, q = np.linalg.solve(a, b)
-                        if -EPS < q < 1 + EPS:
-                            t = p1 + edge_vec * q
-                            coords = cls.project_on_plain(cls.render, np.array([[t.x, t.y, t.z, 1]]))
-                            pg.draw.circle(cls.render.screen, (255, 255, 255), (coords[0][0], coords[0][1]), 5)
-                            new_points.append(p1 + edge_vec * q)
-                            is_left_points = not is_left_points
-
-                    except:
-                        # t = p1 + edge_vec * q
-                        # coords = cls.project_on_plain(cls.render, np.array([[t.x, t.y, t.z, 1]]))
-                        # pg.draw.circle(cls.render.screen, (255, 255, 255), (coords[0][0], coords[0][1]), 5)
-                        continue
-
-                if len(new_points) < 2:
-                    res_faces.append((object2, (color2, vertexes_set2)))
-                    continue
-                cls.add_new_fictive_face(res_vertexes, new_points[0], new_points[1], left_points, color2, object2)
-                cls.add_new_fictive_face(res_vertexes, new_points[0], new_points[1], right_points, color2, object2)
-
-        cls.objects_colors_faces = res_faces
-        cls.vertexes = res_vertexes
+        return new_points2, points_set2
 
     @classmethod
-    def add_new_fictive_face(cls, vertexes, point1, point2, old_vertexes, color, obj):
-        obj_count = len(cls.objects_colors_faces)
-        vert_set = list(range(len(old_vertexes) + 2))
-        obj_verts = [[point1.x, point1.y, point1.z, 1]] + old_vertexes + [[point2.x, point2.y, point2.z, 1]]
-        vertexes.append(obj_verts)
-        cls.objects_colors_faces.append((obj_count, (color, np.array(vert_set))))
+    def get_points_set(cls, point, dir_vec, vertexes, vert_set):
+        # def check_is_edge(vert1, vert2, new_points):
+        #     p1 = Vector3(*vert1[:3])
+        #     p2 = Vector3(*vert2[:3])
+        #
+        #     if new_points[0].get_dist(p1) < 10 * EPS and new_points[1].get_dist(p2) < 10 * EPS:
+        #         return True
+        #
+        #     return False
+
+        points_set = [[] for _ in range(3)]
+        idx = 0
+        new_points = []
+
+        for k in range(len(vertexes)):
+            p1 = Vector3(*vertexes[k][:3])
+            points_set[idx].append(vert_set[k])
+            p2 = Vector3(*vertexes[(k + 1) % len(vertexes)][:3])
+            edge_vec = p2 - p1
+
+            a = np.array([[dir_vec.x, -edge_vec.x], [dir_vec.y, -edge_vec.y]])
+            b = np.array([p1.x - point.x, p1.y - point.y])
+
+            try:
+                t, q = np.linalg.solve(a, b)
+                if -EPS < q < 1 + EPS:
+                    # t = p1 + edge_vec * q
+                    new_points.append(p1 + edge_vec * q)
+                    idx += 1
+
+                    if idx > 2:
+                        return None
+                    # coords = cls.project_on_plain(cls.render, np.array([[t.x, t.y, t.z, 1]]))
+                    # pg.draw.circle(cls.render.screen, (255, 255, 255), (coords[0][0], coords[0][1]), 5)
+            except:
+                continue
+
+        if len(new_points) < 2:
+            return None
+
+        # for k in range(len(vertexes) - 1):
+        #     if check_is_edge(vertexes[k], vertexes[k + 1], new_points):
+        #         return None
+        #
+        # if check_is_edge(vertexes[0], vertexes[len(vertexes) - 1], new_points):
+        #     return None
+
+        return new_points, points_set
+
+    @classmethod
+    def make_faces_intersections_in_space(cls, render):
+        new_colors_faces = []
+        for curr_splitting_obj in range(len(render.objects)):
+            curr_splitting_obj_colors_faces = [x for x in cls.objects_colors_faces if x[0] == curr_splitting_obj]
+            for color_face1 in cls.objects_colors_faces:
+                obj1, (color1, vertexes_set1) = color_face1
+                vertexes1 = cls.vertexes[obj1][vertexes_set1]
+                if obj1 == curr_splitting_obj:
+                    continue
+                new_splitting = []
+                for color_face2 in curr_splitting_obj_colors_faces:
+                    obj2, (color2, vertexes_set2) = color_face2
+                    vertexes2 = cls.vertexes[obj2][vertexes_set2]
+
+                    temp = cls.get_faces_intersection_in_space(vertexes1, vertexes_set1, vertexes2, vertexes_set2)
+                    if temp is None:
+                        new_splitting.append(color_face2)
+                        continue
+
+                    new_points, points_set = temp
+                    cls.add_new_fictive_face(new_splitting, new_points[0], new_points[1], points_set, color2, obj2)
+                curr_splitting_obj_colors_faces = new_splitting[:]
+
+            new_colors_faces += curr_splitting_obj_colors_faces
+        cls.objects_colors_faces = new_colors_faces[:]
+
+        cls.projected_vertexes = []
+        for obj_verts in cls.vertexes:
+            cls.projected_vertexes.append(cls.project_on_plain(render, obj_verts))
+
+    # @classmethod
+    # def make_faces_intersections_in_space(cls, render):
+    #     def check_the_same_equation(equation1, equation2):
+    #         k = equation1[0] / equation2[0]
+    #         for i in range(1, 4):
+    #             if abs(equation1[i] / equation2[i] - k) > EPS:
+    #                 return False
+    #         return True
+    #
+    #     splitting = []
+    #     queue = cls.objects_colors_faces[:]
+    #
+    #     while queue:
+    #         new_splitting = []
+    #         object1, tup1 = queue.pop()
+    #         color1, vertexes_set1 = tup1
+    #         vertexes1 = cls.vertexes[object1][vertexes_set1]
+    #
+    #         for j in range(len(splitting)):
+    #             object2, tup2 = splitting[j]
+    #             if object2 == object1:
+    #                 new_splitting.append(splitting[j])
+    #                 continue
+    #
+    #             color2, vertexes_set2 = tup2
+    #             vertexes2 = cls.vertexes[object2][vertexes_set2]
+    #
+    #             temp = cls.get_faces_intersection_in_space(vertexes1, vertexes_set1, vertexes2, vertexes_set2)
+    #             if temp is None:
+    #                 new_splitting.append(splitting[j])
+    #                 continue
+    #             new_points1, new_points2, points_set1, points_set2 = temp
+    #
+    #             ## check the same plane
+    #             equation1 = cls.get_face_equation(vertexes2)
+    #             for i in range(j + 1, len(splitting)):
+    #                 object3, (color3, vertexes_set3) = splitting[i]
+    #                 vertexes3 = cls.vertexes[object3][vertexes_set3]
+    #                 equation2 = cls.get_face_equation(vertexes3)
+    #                 # print(equation1, equation2)
+    #                 # print("-------------------")
+    #
+    #                 if object2 == object3 and check_the_same_equation(equation1, equation2):
+    #                     print("lalal")
+    #                     temp = cls.get_faces_intersection_in_space(vertexes1, vertexes_set1, vertexes3, vertexes_set3)
+    #                     if temp is None:
+    #                         new_splitting.append(splitting[i])
+    #                         continue
+    #                     new_points1_2, new_points2_2, points_set1_2, points_set2_2 = temp
+    #                     cls.add_new_fictive_face(queue, new_points2_2[0], new_points2_2[1], points_set2_2, color3, object3)
+    #                 else:
+    #                     new_splitting.append(splitting[i])
+    #
+    #             cls.add_new_fictive_face(queue, new_points2[0], new_points2[1], points_set2, color2, object2)
+    #             cls.add_new_fictive_face(queue, new_points1[0], new_points1[1], points_set1, color1, object1)
+    #             break
+    #
+    #         else:
+    #             new_splitting.append((object1, (color1, vertexes_set1)))
+    #
+    #         splitting = new_splitting[:]
+    #
+    #     for i in range(len(splitting)):
+    #         object3, (color3, vertexes_set3) = splitting[i]
+    #         vertexes3 = cls.vertexes[object3][vertexes_set3]
+    #         equation2 = cls.get_face_equation(vertexes3)
+    #         print(object3, equation2)
+    #
+    #     print("---------")
+    #
+    #
+    #     cls.objects_colors_faces = splitting[:]
+    #     #print(len(splitting))
+    #     cls.projected_vertexes = []
+    #     for obj_verts in cls.vertexes:
+    #         cls.projected_vertexes.append(cls.project_on_plain(render, obj_verts))
+
+    @classmethod
+    def add_new_fictive_face(cls, colors_faces, point1, point2, points_set, color, obj):
+        vert_count = len(cls.vertexes[obj])
+        obj_verts = list(cls.vertexes[obj])
+        obj_verts.append([point1.x, point1.y, point1.z, 1])
+        obj_verts.append([point2.x, point2.y, point2.z, 1])
+        cls.vertexes[obj] = np.array(obj_verts)
+        colors_faces.append((obj, (color, points_set[0] + [vert_count, vert_count + 1] + points_set[2])))
+        colors_faces.append((obj, (color, [vert_count] + points_set[1] + [vert_count + 1])))
 
     @classmethod
     def make_svalka(cls, render, objects):
@@ -161,6 +298,7 @@ class Object3D:
     def self_update(self):
         self.mouse_scale()
         self.mouse_rotate()
+        self.mouse_translate()
 
     @classmethod
     def update(cls, render, objects: list):
@@ -170,7 +308,8 @@ class Object3D:
             object.self_update()
         cls.render = render
         cls.make_svalka(render, objects)
-        #cls.make_faces_intersections_in_space()
+        if render.plains_intersection:
+            cls.make_faces_intersections_in_space(render)
         cls.sort_faces()
         cls.draw_objects(render, objects)
 
@@ -237,6 +376,8 @@ class Object3D:
 
     @classmethod
     def sort_faces(cls):
+        # cls.objects_colors_faces.sort(key=lambda x: x[0])
+        # print(len(cls.objects_colors_faces))
         for k in range(len(cls.objects_colors_faces) - 1):
             for i in range(k, len(cls.objects_colors_faces)):
 
@@ -267,28 +408,26 @@ class Object3D:
 
     @classmethod
     def draw_objects(cls, render, objects):
-        print(cls.objects_colors_faces)
-
-        for index, color_face in enumerate(cls.objects_colors_faces):
+        for color_face in cls.objects_colors_faces:
             object_num, tup = color_face
             color, face = tup
 
-            # font = pg.font.SysFont('Comic Sans MS', 20)
-            # for i in range(len(face)):
-            #     vertex = vertexes[object_num][i]
-            #     vert = face[i]
-            #     render.screen.blit(font.render(str(vert), False, (255, 255, 255)), (vertex[0], vertex[1]))
+            # if object_num == 0:
+            #     print(list(x for x in cls.objects_colors_faces if x[0] == 0))
+            #     font = pg.font.SysFont('Comic Sans MS', 20)
+            #     for i in range(len(face)):
+            #         vertex = cls.projected_vertexes[object_num][face[i]]
+            #         vert = face[i]
+            #         render.screen.blit(font.render(str(vert), False, (255, 255, 255)), (vertex[0], vertex[1]))
 
             polygon = cls.projected_vertexes[object_num][face]
             if not any_func(polygon, render.H_WIDTH, render.H_HEIGHT):
                 pg.draw.polygon(render.screen, color, polygon)
+
                 if objects[object_num].is_highlighted:
                     pg.draw.polygon(render.screen, (255, 255, 255), polygon, 2)
                     for vertex in polygon:
                         pg.draw.circle(render.screen, (255, 255, 255), vertex, 5)
-                # if self.label:
-                #     text = self.font.render(self.label[index], True, pg.Color('white'))
-                #     self.render.screen.blit(text, polygon[-1])
 
     @classmethod
     def project_on_plain(cls, render, vertexes):
@@ -412,18 +551,8 @@ class Object3D:
     def rotate_global_z(self, angle):
         self.transform_matrix = self.transform_matrix @ rotate_z(angle)
 
-    # @classmethod
-    # def find_visible_points(cls, objects_colors_faces, projected_vertexes, render):
-    #     for i in range(len(objects_colors_faces) - 1, -1, -1):
-    #         object, tup = objects_colors_faces[i]
-    #         color, vertexes_set = tup
-    #         face = [projected_vertexes[object][_] for _ in vertexes_set]
-    #
-    #         count = 0
-    #         for vertex in projected_vertexes:
-    #             if cls.check_point_in_face_on_plane(Vector2(vertex[0], vertex[1]), face):
-    #                 count += 1
-    #
+    def rotate_around_vector(self, v: Vector3, angle):
+        self.vertexes = self.vertexes @ rotate_around_vector(v, angle)
 
     @classmethod
     def check_point_click_inside(cls, point: Vector2, face, radius):
@@ -450,23 +579,12 @@ class Object3D:
             color, vertexes_set = tup
             face = [cls.projected_vertexes[object][_] for _ in vertexes_set]
 
-            # for i in range(len(objects)):
-            #     objects[i].is_highlighted = False
-
             if cls.check_point_in_face_on_plane(point, face):
-                # return object
-                # if not objects[object].is_highlighted:
-                #     for j in range(len(objects)):
-                #         objects[j].is_highlighted = False
-                #
-                #     objects[object].is_highlighted = True
-                #     print(object)
-
-                if cls.check_point_click_inside(point, face, 15):
+                if cls.check_point_click_inside(point, face, 5):
                     return objects[object], True
                 return objects[object], False
 
-            if cls.check_point_click_outside(point, cls.projected_vertexes[object], 15):
+            if cls.check_point_click_outside(point, cls.projected_vertexes[object], 5):
                 return objects[object], True
 
         return None, False
@@ -478,10 +596,10 @@ class Object3D:
     # --contol --
     def mouse_scale(self):
         def clip(scale_value):
-            if scale_value < 0.7:
-                return 0.7
-            if scale_value > 2:
-                return 2
+            # if scale_value < 0.7:
+            #     return 0.7
+            # if scale_value > 2:
+            #     return 2
             return scale_value
 
         if self.on_scale:
@@ -504,8 +622,41 @@ class Object3D:
                 x, y = pg.mouse.get_pos()
                 dx = -(x - self.prev_x)
                 dy = -(y - self.prev_y)
+
                 if abs(dx) > abs(dy):
                     self.rotate_y(math.pi / 180 * dx)
                 else:
-                    self.rotate_x(math.pi / 180 * dy)
+                    self.rotate_around_vector(Vector3(*self.render.camera.right[:3]), -math.pi / 180 * dy)
                 self.prev_x, self.prev_y = x, y
+
+    def mouse_translate(self):
+        if self.on_translate:
+            if self.prev_x is None:
+                self.prev_x, self.prev_y = pg.mouse.get_pos()
+            else:
+                x, y = pg.mouse.get_pos()
+                dx = (x - self.prev_x) / 50.
+                dy = -(y - self.prev_y) / 50.
+
+                self.translate((0, dy, 0))
+                # a  = ((self.render.camera.right * dx)[:3])
+                self.translate((self.render.camera.right * dx)[:3])
+                self.prev_x, self.prev_y = x, y
+
+    def convert_matrix_from_numpy(self):
+        res = []
+        for line in self.transform_matrix:
+            res.append(list(map(float, line)))
+        return res
+
+    def convert_vertexes_from_numpy(self):
+        res = []
+        for verts in self.vertexes:
+            res.append(list(map(float, verts)))
+        return res
+
+    def get_data(self):
+        data = {}
+        data['matrix'] = self.convert_matrix_from_numpy()
+        data['vertexes'] = self.convert_vertexes_from_numpy()
+        return data

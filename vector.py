@@ -50,6 +50,10 @@ class Vector3:
         # debug
         return f" vec3-> ({self.x}, {self.y}, {self.z})"
 
+    def get_dist(self, b):
+        return math.sqrt((self.x - b.x) * (self.x - b.x) +
+                         (self.y - b.y) * (self.y - b.y) + (self.z - b.z) * (self.z - b.z))
+
 
 class Vector2:
     def __init__(self, x=0, y=0):

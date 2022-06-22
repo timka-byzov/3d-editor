@@ -67,6 +67,7 @@ class FiguresControl:
                 cls.mouse_hold = False
                 cls.editing_object.on_scale = False
                 cls.editing_object.on_rotation = False
+                cls.editing_object.on_translate = False
             return
 
         # for object in objects:
@@ -87,6 +88,9 @@ class FiguresControl:
                 # new_move
                 if is_point_click and mouse[0]:
                     clicked_obj.on_scale = True
+
+                elif mouse[0]:
+                    clicked_obj.on_translate = True
 
                 elif mouse[2]:
                     clicked_obj.on_rotation = True
